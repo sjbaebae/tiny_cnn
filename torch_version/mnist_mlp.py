@@ -14,7 +14,7 @@ class Linear(nn.Module):
         if activation == "relu":
             self.activation = F.relu
         elif activation == "sigmoid":
-            self.activation = F.sigmoid
+            self.activation = F.sigmoid 
         elif activation == "tanh":
             self.activation = F.tanh
         elif activation == "gelu":
