@@ -3,17 +3,17 @@ import numpy as np
 import struct
 import os
 from pathlib import Path
+import PIL.Image as Image
+import torch.nn.functional as F
 
 optimizer = torch.optim.AdamW(lr=1e-3, weight_decay=0.01)
 loss = torch.nn.CrossEntropyLoss()
 
-def read_idx(filepath: Path):
-    with open(filepath, 'rb') as f:
+def read_idx(filename: Path) :
+    with open(filename, "rb") as f:
         zero1, zero2, dtype_code, num_dims = struct.unpack(">BBBB", f.read(4))
-
         assert zero1 == 0 and zero2 == 0, "Invalid IDX file"
-
-        # map dtype
+        
         dtype_map = {
             0x08: np.uint8,
             0x09: np.int8,
@@ -22,37 +22,37 @@ def read_idx(filepath: Path):
             0x0D: np.float32,
             0x0E: np.float64,
         }
+        
         dtype = dtype_map[dtype_code]
-
-        # read shape
-        shape: tuple[int, ...] = struct.unpack(">" + "I" * num_dims, f.read(4 * num_dims))
-
-        # read and return data
+        shape = struct.unpack(">" + "I" * num_dims, f.read(4 * num_dims))
         return np.fromfile(f, dtype=dtype).reshape(shape)
 
 def load_data(data_dir: Path = Path("data")):
-    # laod train data
     train_images = read_idx(data_dir / "train-images-idx3-ubyte")
     train_labels = read_idx(data_dir / "train-labels-idx1-ubyte")
     test_images = read_idx(data_dir / "t10k-images-idx3-ubyte")
     test_labels = read_idx(data_dir / "t10k-labels-idx1-ubyte")
+    
+    # resize to 16x16 and normalize to 0~1
 
-    # normalize dataset
-    train_images = train_images.astype(np.float32) / 255.0
-    test_images = test_images.astype(np.float32) / 255.0
+    train_images = torch.from_numpy(train_images).float() / 255.0   # (N,H,W,C)
+    train_images = train_images.permute(0, 3, 1, 2)                            # (N,C,H,W)
+    train_images = F.interpolate(train_images, size=(16, 16), mode='bilinear', align_corners=False)
+    
+    test_images = torch.from_numpy(test_images).float() / 255.0
+    test_images = test_images.permute(0, 3, 1, 2)
+    test_images = F.interpolate(test_images, size=(16, 16), mode='bilinear', align_corners=False)
+    
+    train_labels = torch.from_numpy(train_labels).long()
+    test_labels = torch.from_numpy(test_labels).long()
 
-    # convert to torch tensor
-    train_images = torch.from_numpy(train_images)
-    train_labels = torch.from_numpy(train_labels)
-    test_images = torch.from_numpy(test_images)
-    test_labels = torch.from_numpy(test_labels)
-
-    # create dataloader
+    # use dataloaders
     train_dataset = torch.utils.data.TensorDataset(train_images, train_labels)
     test_dataset = torch.utils.data.TensorDataset(test_images, test_labels)
+    
     train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=64, shuffle=True)
     test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=64, shuffle=False)
-
+    
     return train_loader, test_loader
     
 def train(model, dataloader, optimizer, loss_fn, device):
