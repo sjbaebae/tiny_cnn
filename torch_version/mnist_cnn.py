@@ -278,6 +278,10 @@ class Conv2D(nn.Module):
         output = output.permute(0, 2, 1) # (B, num_blocks, true matrix needed for conv (kernel * in_channels))
 
         # self.weight currently is (out_channels, in_channels, kernel_height, kernel_width)
+        # convert to flattened
+        weight_flat = self.weight.reshape(self.out_channels, -1)
+        return output @ weight_flat.T
+        
         
         
         
