@@ -67,7 +67,7 @@ class Conv2D(nn.Module):
             raise ValueError(f"Dilation {dilation} not supported")
 
         # define weights (kernel)
-        self.weight = nn.Parameter(torch.randn(out_channels, in_channels, self.kernel_height, self.kernel_width))
+        self.weight = nn.Parameter(torch.randn(out_channels, in_channels, self.kernel_size[0], self.kernel_size[1]))
 
         # define bias if exists (bias applied on each convolution across each out channel)
         if bias:
@@ -104,8 +104,8 @@ class Conv2D(nn.Module):
         # stride tells you the gap between each kernel application
         
 
-        out_height = (in_height + 2 * self.padding_height - self.dilation_height * (kernel_height - 1) - 1) // self.stride_height + 1
-        out_width = (in_width + 2 * self.padding_width - self.dilation_width * (kernel_width - 1) - 1) // self.stride_width + 1
+        out_height = (in_height + 2 * self.padding[0] - self.dilation[0] * (kernel_height - 1) - 1) // self.stride[0] + 1
+        out_width = (in_width + 2 * self.padding[1] - self.dilation[1] * (kernel_width - 1) - 1) // self.stride[1] + 1
 
         # okay technically number of legal positions is total spaces heff = (in_height + 2 * padding_size) - keff ( (kernel_size - 1) * dilation + 1 ) + 1) + 1
 
@@ -132,8 +132,8 @@ class Conv2D(nn.Module):
                                 for kw in range(kernel_width):
                                     # first calculate input coordinates (start h and w). 
                                     # note padding exists to the left of any index. Must provide index corrective factor of -padding to get true index since accessible kernel
-                                    ih = oh * self.stride_height - self.padding_height + self.dilation_height * kh
-                                    iw = ow * self.stride_width - self.padding_width + self.dilation_width * kw
+                                    ih = oh * self.stride[0] - self.padding[0] + self.dilation[0] * kh
+                                    iw = ow * self.stride[1] - self.padding[1] + self.dilation[1] * kw
 
                                     if ih >= 0 and iw >= 0 and ih < in_height and iw < in_width:
                                         # if in range, now lets do the multiply
@@ -153,7 +153,7 @@ class Conv2D(nn.Module):
         # okay similar idea but we convert all these into cols
 
         # this time we want to preapply padding so that we don't have to do boundary checks
-        x_padded = F.pad(x, (self.padding_width, self.padding_width, self.padding_height, self.padding_height))
+        x_padded = F.pad(x, (self.padding[1], self.padding[1], self.padding[0], self.padding[0]))
         
         # get relevant variables
         batch_size, in_channels, in_height, in_width = x_padded.shape
@@ -163,22 +163,22 @@ class Conv2D(nn.Module):
         # pixels covered by a given kernel is (kernel_size - 1) * dilation + 1
         # stride tells you the gap between each kernel application
         
-        out_height = (in_height - self.dilation_height * (kernel_height - 1) - 1) // self.stride_height + 1
-        out_width = (in_width - self.dilation_width * (kernel_width - 1) - 1) // self.stride_width + 1
+        out_height = (in_height - self.dilation[0] * (kernel_height - 1) - 1) // self.stride[0] + 1
+        out_width = (in_width - self.dilation[1] * (kernel_width - 1) - 1) // self.stride[1] + 1
 
         # now we want to create the im2col matrix. 
         cols = []
 
         # reshape to simplify
 
-        k_effh = self.dilation_height * (kernel_height - 1) + 1
-        k_effw = self.dilation_width * (kernel_width - 1) + 1
+        k_effh = self.dilation[0] * (kernel_height - 1) + 1
+        k_effw = self.dilation[1] * (kernel_width - 1) + 1
 
         for oh in range(out_height):
             for ow in range(out_width):
-                oh_end = oh * self.stride_height + k_effh
-                ow_end = ow * self.stride_width + k_effw
-                row = x_padded[:, :, oh * self.stride_height:oh_end:self.dilation_height, ow * self.stride_width:ow_end:self.dilation_width]
+                oh_end = oh * self.stride[0] + k_effh
+                ow_end = ow * self.stride[1] + k_effw
+                row = x_padded[:, :, oh * self.stride[0]:oh_end:self.dilation[0], ow * self.stride[1]:ow_end:self.dilation[1]]
                 row = row.reshape(batch_size, -1)
                 cols.append(row)
 
@@ -198,13 +198,13 @@ class Conv2D(nn.Module):
 
         return result
 
-    def _check_positive(param, param_name, strict=True):
+    def _check_positive(self, param, param_name, strict=True):
         cond = all(p > 0 for p in param) if strict else all(p >= 0 for p in param)
         torch._check(
             cond, lambda: f"{param_name} should be greater than zero, but got {param}"
         )
 
-    def _check_size_2(param, param_name):
+    def _check_size_2(self, param, param_name):
         # check if either int or len <= 2
         torch._check(len(param) <= 2, lambda: f"{param_name} should be size 2")
 
@@ -224,7 +224,7 @@ class Conv2D(nn.Module):
         ndims = len(x.shape)
 
         torch._check(
-            ndim in (3,4) and all(d != 0 for d in shape[-3:]),
+            ndims in (3,4) and all(d != 0 for d in shape[-3:]),
             lambda: "Expected 3D or 4D (batch mode) tensor for input with possible 0 batch size "
             f"and non-zero dimensions, but got: {tuple(shape)}",
         )
@@ -315,14 +315,18 @@ print(conv2d_layer._convolve_brute(input_image).shape)
 end_times["brute"] = time.time() - start
 print(f"Time: {end_times['brute']:.4f}")
 
-print("2. Im2Col")
+print("2. Im2Col Slow")
 start = time.time()
 print(conv2d_layer.convolve_im2col_slow(input_image).shape)
 end_times["im2col"] = time.time() - start
 print(f"Time: {end_times['im2col']:.4f}")
 
+print("3. Im2Col Fast")
+start = time.time()
+print(conv2d_layer.convolve_im2col_fast(input_image).shape)
+end_times["im2col_fast"] = time.time() - start
+print(f"Time: {end_times['im2col_fast']:.4f}")
 
-                        
 # LEADERBOARD
 print("===== LEADERBOARD =====")
 leaderboard = sorted(end_times.items(), key=lambda x: x[1])
