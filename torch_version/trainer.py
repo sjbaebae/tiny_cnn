@@ -6,7 +6,8 @@ from pathlib import Path
 import PIL.Image as Image
 import torch.nn.functional as F
 
-from torch_version.mnist_mlp import MLP
+from mnist_mlp import MLP
+from mnist_cnn import CNN_Base
 
 def read_idx(filename: Path) :
     with open(filename, "rb") as f:
@@ -26,7 +27,7 @@ def read_idx(filename: Path) :
         shape = struct.unpack(">" + "I" * num_dims, f.read(4 * num_dims))
         return np.fromfile(f, dtype=dtype).reshape(shape)
 
-def load_data(data_dir: Path = Path("data"), flatten: bool = False):
+def load_data(data_dir: Path = Path("../data"), flatten: bool = False):
     train_images = read_idx(data_dir / "train-images-idx3-ubyte")
     train_labels = read_idx(data_dir / "train-labels-idx1-ubyte")
     test_images = read_idx(data_dir / "t10k-images-idx3-ubyte")
@@ -35,12 +36,13 @@ def load_data(data_dir: Path = Path("data"), flatten: bool = False):
     # normalize to 0~1. Image size of 28 is okay no need to do F.interpolate
     # channel size here is 1. So only 3 dims (N, H, W)
 
-    train_images = torch.from_numpy(train_images).float() / 255.0   # (N,H,W)
-    test_images = torch.from_numpy(test_images).float() / 255.0
+    train_images = torch.from_numpy(train_images).unsqueeze(1).float() / 255.0   # (N,H,W)
+    test_images = torch.from_numpy(test_images).unsqueeze(1).float() / 255.0
 
     if flatten:
         train_images = train_images.reshape(train_images.shape[0], -1)
         test_images = test_images.reshape(test_images.shape[0], -1)
+
     
     train_labels = torch.from_numpy(train_labels).long()
     test_labels = torch.from_numpy(test_labels).long()
@@ -82,9 +84,22 @@ def evaluate(model, dataloader, loss_fn, device):
     
 
 if __name__ == "__main__":
-    train_loader, test_loader = load_data(flatten=True)
-    IMAGE_SIZE = train_loader.dataset[0][0].shape[0]
-    model = MLP(in_features=IMAGE_SIZE, out_features=10, hidden_features=128, num_hidden_layers=2, activation="relu")
+    # train MLP
+    # train_loader, test_loader = load_data(flatten=True)
+    # IMAGE_SIZE = train_loader.dataset[0][0].shape[0]
+    # model = MLP(in_features=IMAGE_SIZE, out_features=10, hidden_features=128, num_hidden_layers=2, activation="relu")
+    # optimizer = torch.optim.AdamW(lr=1e-3, weight_decay=0.01, params=model.parameters())
+    # loss_fn = torch.nn.CrossEntropyLoss()
+    # device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
+    # model.to(device)
+    # for epoch in range(10):
+    #     train_loss = train(model, train_loader, optimizer, loss_fn, device)
+    #     test_loss = evaluate(model, test_loader, loss_fn, device)
+    #     print(f"Epoch {epoch}: train_loss={train_loss:.4f}, test_loss={test_loss:.4f}")
+
+    # train CNN
+    train_loader, test_loader = load_data(flatten=False)
+    model = CNN_Base(in_channels=1, out_channels=10)
     optimizer = torch.optim.AdamW(lr=1e-3, weight_decay=0.01, params=model.parameters())
     loss_fn = torch.nn.CrossEntropyLoss()
     device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")

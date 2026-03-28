@@ -92,7 +92,7 @@ class Conv2D(nn.Module):
             raise ValueError(f"Activation function {activation} not supported")
 
     def forward(self, x: torch.tensor) -> torch.tensor:
-        pass
+        return self.convolve_im2col_fast(x)
 
     def _convolve_brute(self, x: torch.tensor) -> torch.tensor:
         # get relevant variables
@@ -280,8 +280,50 @@ class Conv2D(nn.Module):
         # self.weight currently is (out_channels, in_channels, kernel_height, kernel_width)
         # convert to flattened
         weight_flat = self.weight.reshape(self.out_channels, -1)
-        return output @ weight_flat.T
+        result = output @ weight_flat.T
+        result = result.reshape(batch_dim, self.out_channels, *output_shape)
+        return result
+
+class CNN_Base(nn.Module):
+    def __init__(self, in_channels, out_channels, bias=True, activation="relu", residuals=False):
+        super().__init__()
+        self.residuals = residuals
+        if residuals:
+            # in_shape must match out_shape for residuals. So the kernel op cannot change the shape
+            self.conv1 = Conv2D(in_channels, in_channels, kernel_size=3, stride=1, padding=1, bias=bias, activation=activation)
+            self.conv2 = Conv2D(in_channels, in_channels, kernel_size=3, stride=1, padding=1, bias=bias, activation=activation)
+            self.conv3 = Conv2D(in_channels, in_channels, kernel_size=3, stride=1, padding=1, bias=bias, activation=activation)
+            self.conv4 = Conv2D(in_channels, in_channels, kernel_size=3, stride=1, padding=1, bias=bias, activation=activation)
+            self.fc1 = nn.Linear(in_channels * 28 * 28, 10)
+        else:
+            self.conv1 = Conv2D(in_channels, 16, kernel_size=3, stride=1, padding=1, bias=bias, activation=activation)
+            self.conv2 = Conv2D(16, 32, kernel_size=3, stride=1, padding=1, bias=bias, activation=activation)
+            self.conv3 = Conv2D(32, 64, kernel_size=3, stride=1, padding=1, bias=bias, activation=activation)
+            self.conv4 = Conv2D(64, 128, kernel_size=3, stride=1, padding=1, bias=bias, activation=activation)
+            # calculate the flattened size
+            self.fc1 = nn.LazyLinear(out_features=10)
+
+    def forward(self, x):
+        if self.residuals:
+            x = x + self.conv1(x)
+        else:
+            x = self.conv1(x)
+        if self.residuals:
+            x = x + self.conv2(x)
+        else:
+            x = self.conv2(x)
+        if self.residuals:
+            x = x + self.conv3(x)
+        else:
+            x = self.conv3(x)
         
+        if self.residuals:
+            x = x + self.conv4(x)
+        else:
+            x = self.conv4(x)
+        x = x.reshape(x.shape[0], -1)
+        x = self.fc1(x)
+        return x
 
 if __name__ == "__main__":
 
