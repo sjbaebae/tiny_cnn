@@ -26,7 +26,7 @@ The plan is to start by training models using PyTorch, and then systematically p
 
 ## Usage
 
-1. Download the raw MNIST `.idx` and `.idx3/1-ubyte` binaries into the `data/` directory.
+1. Download the raw MNIST `.idx` and `.idx3/1-ubyte` binaries into the `data/` directory. Run with python `download.py`
 2. Run the PyTorch training loop:
    ```bash
    python trainer_torch.py
