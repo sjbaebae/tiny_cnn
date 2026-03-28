@@ -6,7 +6,7 @@ from pathlib import Path
 import PIL.Image as Image
 import torch.nn.functional as F
 
-from mnist_mlp import MLP
+from torch_version.mnist_mlp import MLP
 
 def read_idx(filename: Path) :
     with open(filename, "rb") as f:

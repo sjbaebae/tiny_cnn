@@ -11,7 +11,9 @@ The plan is to start by training models using PyTorch, and then systematically p
   - [x] Custom training loop that directly parses the raw IDX files rather than using `torchvision.datasets` (`trainer_torch.py`).
   - [x] Custom CNN architectures built from scratch (`mnist_cnn.py`), featuring multiple Conv2D implementations:
     - Brute force nested loops (`_convolve_brute`)
-    - Optimized `im2col` matrix multiplication variants (`convolve_im2col_slow`, `convolve_im2col_fast`)
+    - `im2col` matrix multiplication variants:
+      - Slow, loop-based implementation (`convolve_im2col_slow`)
+      - Fast, fully vectorized implementation (`convolve_im2col_fast`)
 - **Phase 2: Dropping PyTorch Components**
   - [ ] Write a custom auto-grad engine in Python/NumPy to replace `loss.backward()`.
   - [ ] Implement custom optimizers (e.g., AdamW, SGD) to replace `torch.optim`.
@@ -22,7 +24,7 @@ The plan is to start by training models using PyTorch, and then systematically p
 
 - `data/` - Expects the raw MNIST dataset (`*-idx*-ubyte` files).
 - `mnist_mlp.py` - Custom MLP and barebones Linear layer implementation.
-- `mnist_cnn.py` - Custom CNN architecture and Conv2D implementations (brute force, im2col variants).
+- `mnist_cnn.py` - Custom CNN architecture and Conv2D implementations (brute force, loop-based im2col, vectorized im2col).
 - `trainer_torch.py` - The main training loop, evaluation code, and logic to handle the `struct` parsing of MNIST's native IDX file format.
 - `download.py` - Script to download the raw MNIST dataset.
 
