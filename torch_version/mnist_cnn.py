@@ -282,59 +282,42 @@ class Conv2D(nn.Module):
         weight_flat = self.weight.reshape(self.out_channels, -1)
         return output @ weight_flat.T
         
-        
-        
-        
 
-        
+if __name__ == "__main__":
 
-        
-        
-        
+    input_image = torch.randn(32, 3, 28, 28)
 
-        
+    conv2d_layer = Conv2D(in_channels=3, out_channels=1, kernel_size=9, stride=2, padding=1, bias=True, activation="relu")
 
+    print("===== SPEED TESTS =====")
 
+    end_times = {}
 
-    
+    print("1. Brute Force")
+    start = time.time() 
+    print(conv2d_layer._convolve_brute(input_image).shape)
+    end_times["brute"] = time.time() - start
+    print(f"Time: {end_times['brute']:.4f}")
 
+    print("2. Im2Col Slow")
+    start = time.time()
+    print(conv2d_layer.convolve_im2col_slow(input_image).shape)
+    end_times["im2col"] = time.time() - start
+    print(f"Time: {end_times['im2col']:.4f}")
 
+    print("3. Im2Col Fast")
+    start = time.time()
+    print(conv2d_layer.convolve_im2col_fast(input_image).shape)
+    end_times["im2col_fast"] = time.time() - start
+    print(f"Time: {end_times['im2col_fast']:.4f}")
 
-
-input_image = torch.randn(1, 1, 28, 28)
-
-conv2d_layer = Conv2D(in_channels=1, out_channels=1, kernel_size=3, stride=2, padding=1, bias=True, activation="relu")
-
-print("===== SPEED TESTS =====")
-
-end_times = {}
-
-print("1. Brute Force")
-start = time.time() 
-print(conv2d_layer._convolve_brute(input_image).shape)
-end_times["brute"] = time.time() - start
-print(f"Time: {end_times['brute']:.4f}")
-
-print("2. Im2Col Slow")
-start = time.time()
-print(conv2d_layer.convolve_im2col_slow(input_image).shape)
-end_times["im2col"] = time.time() - start
-print(f"Time: {end_times['im2col']:.4f}")
-
-print("3. Im2Col Fast")
-start = time.time()
-print(conv2d_layer.convolve_im2col_fast(input_image).shape)
-end_times["im2col_fast"] = time.time() - start
-print(f"Time: {end_times['im2col_fast']:.4f}")
-
-# LEADERBOARD
-print("===== LEADERBOARD =====")
-leaderboard = sorted(end_times.items(), key=lambda x: x[1])
-for i, (method, time) in enumerate(leaderboard):
-    print(f"{i+1}. {method}: {time:.4f} | Speedup factor {(leaderboard[-1][1] / time):.2f}x")
-                        
-                        
-
-                                    
-                                    
-            
+    # LEADERBOARD
+    print("===== LEADERBOARD =====")
+    leaderboard = sorted(end_times.items(), key=lambda x: x[1])
+    for i, (method, time) in enumerate(leaderboard):
+        print(f"{i+1}. {method}: {time:.4f} | Speedup factor {(leaderboard[-1][1] / time):.2f}x")
+                            
+    print("Note that it is likely that for smaller batch sizes, brute force is faster. And without high input channels / kernel sizes, im2col likely faster than im2col_fast")
+                                        
+                                        
+                
