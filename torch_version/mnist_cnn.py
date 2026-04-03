@@ -22,7 +22,199 @@ def _im2col_col2im_indices_along_dim(
     # kernel_grid along dim d, to get block indices along dim d
     return blocks_d_indices + kernel_grid
 
+
+def convolve_brute(x: torch.tensor, weight: torch.tensor, bias: torch.tensor, activation, stride, padding, dilation) -> torch.tensor:
+    # get relevant variables
+    batch_size, in_channels, in_height, in_width = x.shape
+    out_channels, in_channels, kernel_height, kernel_width = weight.shape
+
+    # total input size = (in_height + 2 * padding_height)
+    # pixels covered by a given kernel is (kernel_size - 1) * dilation + 1
+    # stride tells you the gap between each kernel application
+    
+
+    out_height = (in_height + 2 * padding[0] - dilation[0] * (kernel_height - 1) - 1) // stride[0] + 1
+    out_width = (in_width + 2 * padding[1] - dilation[1] * (kernel_width - 1) - 1) // stride[1] + 1
+
+    # okay technically number of legal positions is total spaces heff = (in_height + 2 * padding_size) - keff ( (kernel_size - 1) * dilation + 1 ) + 1) + 1
+
+    # now we want to 0 index because otherwise for a given stride the possible pos is pos % stride == 1 (since that ensures stride to the left). 0 index, and then we can just do pos % stride == 0
+
+    # So then becomes (heff - keff) is 0 indexed position. We can divide by stride now to get all possible positions that have stride * k to the left (hence valid) -> (heff - keff) // stride.
+
+    # but we know 0 position is valid so + 1. 
+
+    # this results in (in_height + 2 * padding_size - true_kernel_size) // stride + 1
+
+    # now do dumb looping
+
+    output = torch.zeros(batch_size, out_channels, out_height, out_width)
+
+    for b in range(batch_size):
+        for oc in range(out_channels):
+            for oh in range(out_height):
+                for ow in range(out_width):
+                    # build accumulator
+                    acc = 0
+                    for ic in range(in_channels):
+                        for kh in range(kernel_height):
+                            for kw in range(kernel_width):
+                                # first calculate input coordinates (start h and w). 
+                                # note padding exists to the left of any index. Must provide index corrective factor of -padding to get true index since accessible kernel
+                                ih = oh * stride[0] - padding[0] + dilation[0] * kh
+                                iw = ow * stride[1] - padding[1] + dilation[1] * kw
+
+                                if ih >= 0 and iw >= 0 and ih < in_height and iw < in_width:
+                                    # if in range, now lets do the multiply
+                                    acc += x[b, ic, ih, iw] * weight[oc, ic, kh, kw]
+
+                    if bias is not None:
+                        acc += bias[oc]
+
+                    if activation is not None:
+                        acc = activation(acc)
+                    
+                    output[b, oc, oh, ow] = acc
+
+    return output
+
+def im2col_slow(x: torch.Tensor, kernel_size, stride, padding, dilation) -> tuple[torch.Tensor, int, int]:
+    # okay similar idea but we convert all these into cols
+
+    # this time we want to preapply padding so that we don't have to do boundary checks
+    x_padded = F.pad(x, (padding[1], padding[1], padding[0], padding[0]))
+    
+    # get relevant variables
+    batch_size, in_channels, in_height, in_width = x_padded.shape
+    kernel_height, kernel_width = kernel_size
+
+    # total input size = (in_height + 2 * padding_height)
+    # pixels covered by a given kernel is (kernel_size - 1) * dilation + 1
+    # stride tells you the gap between each kernel application
+    
+    out_height = (in_height - dilation[0] * (kernel_height - 1) - 1) // stride[0] + 1
+    out_width = (in_width - dilation[1] * (kernel_width - 1) - 1) // stride[1] + 1
+
+    # now we want to create the im2col matrix. 
+    cols = []
+
+    # reshape to simplify
+
+    k_effh = dilation[0] * (kernel_height - 1) + 1
+    k_effw = dilation[1] * (kernel_width - 1) + 1
+
+    for oh in range(out_height):
+        for ow in range(out_width):
+            oh_end = oh * stride[0] + k_effh
+            ow_end = ow * stride[1] + k_effw
+            row = x_padded[:, :, oh * stride[0]:oh_end:dilation[0], ow * stride[1]:ow_end:dilation[1]]
+            row = row.reshape(batch_size, -1)
+            cols.append(row)
+
+    cols = torch.stack(cols, dim=1)
+
+    return cols, out_height, out_width
+
+def check_positive(param, param_name, strict=True):
+    cond = all(p > 0 for p in param) if strict else all(p >= 0 for p in param)
+    torch._check(
+        cond, lambda: f"{param_name} should be greater than zero, but got {param}"
+    )
+
+def check_size_2(param, param_name):
+    # check if either int or len <= 2
+    torch._check(len(param) <= 2, lambda: f"{param_name} should be size 2")
+
+def im2col_fast(x: torch.Tensor, kernel_size, stride, padding, dilation, device=None, pool=None):
+    if device:
+        dev = device
+    else:
+        dev = x.device
+    check_size_2(kernel_size, "kernel_size")
+    check_size_2(dilation, "dilation")
+    check_size_2(padding, "padding")
+    check_size_2(stride, "stride")
+
+    check_positive(kernel_size, "kernel_size")
+    check_positive(dilation, "dilation")
+    check_positive(padding, "padding", strict=False)
+    check_positive(stride, "stride")
+
+    # get relevant variables
+    shape = x.shape
+    ndims = len(x.shape)
+
+    torch._check(
+        ndims in (3,4) and all(d != 0 for d in shape[-3:]),
+        lambda: "Expected 3D or 4D (batch mode) tensor for input with possible 0 batch size "
+        f"and non-zero dimensions, but got: {tuple(shape)}",
+    )
+
+    # output check
+    output_shape = tuple(
+        (out + 2 * pad - dil * (ker - 1) - 1) // st + 1
+        for out, pad, dil, ker, st in zip(
+            shape[-2:], padding, dilation, kernel_size, stride
+        )
+    )
+
+    torch._check(
+        all(c > 0 for c in output_shape),
+        lambda: f"Given an input withs shape {shape[-2:]}, "
+        f"kernel size {kernel_size}, dilation {dilation}, "
+        f"padding {padding}, stride {stride}, "
+        f"the calculated shape of the sliding blocks is of {output_shape} "
+        "but each of the components of output shape must be at least 1"
+    )
+
+    # base checks completed.
+
+    # if not batched, batch
+    if ndims == 3:
+        x = x.unsqueeze(0)
+
+    batch_dim, channel_dim, input_h, input_w = x.shape
+
+    # block indices
+    blocks_row_indices = _im2col_col2im_indices_along_dim(
+        input_h, kernel_size[0], dilation[0], padding[0], stride[0], dev
+    )
+    blocks_col_indices = _im2col_col2im_indices_along_dim(
+        input_w, kernel_size[1], dilation[1], padding[1], stride[1], dev
+    )
+    
+
+    # pad input. F.pad takes (pad_left, pad_right, pad_top, pad_bottom) [BAD]
+    padded_input = F.pad(x, (padding[1], padding[1], padding[0], padding[0]))
+
+    blocks_row_indices = blocks_row_indices.unsqueeze(-1).unsqueeze(-1)
+    output = padded_input[:, :, blocks_row_indices, blocks_col_indices] # (B, C, KH, OH, KW, OW)
+    output = output.permute(0, 1, 2, 4, 3, 5) # (B, C, KH, KW, OH, OW)
+
+    # get number of blocks for final reshape
+    num_blocks_row = blocks_row_indices.size(1)
+    num_blocks_col = blocks_col_indices.size(1)
+
+    if pool is None:
+        output = output.reshape(batch_dim, channel_dim * kernel_size[0] * kernel_size[1], num_blocks_row * num_blocks_col) # now we get (B, true matrix needed for conv (kernel * in_channels), number of such blocks)
+        output = output.permute(0, 2, 1) # (B, num_blocks, true matrix needed for conv (kernel * in_channels))
+
+        return output, output_shape
+    else:
+        # swap to kernel format
+        output = output.permute(0, 1, 3, 5, 2, 4) # (B, C, OH, OW, KH, KW)
+        output = output.reshape(batch_dim, channel_dim, num_blocks_row, num_blocks_col, -1)
+        if pool == "mean":
+            output = output.mean(dim=-1)
+        elif pool == "max":
+            output = output.max(dim=-1).values
+        else:
+            raise ValueError(f"Pool {pool} not supported")
+
+        return output
+
 class Conv2D(nn.Module):
+
     def __init__(self, in_channels: int = 3, out_channels: int = 3, kernel_size: int = 3, stride: int = 1, dilation: int = 1, padding: int = 0, bias: bool = True, activation: 'str' = "relu") -> None:
         super().__init__()
 
@@ -67,11 +259,14 @@ class Conv2D(nn.Module):
             raise ValueError(f"Dilation {dilation} not supported")
 
         # define weights (kernel)
-        self.weight = nn.Parameter(torch.randn(out_channels, in_channels, self.kernel_size[0], self.kernel_size[1]))
+        import math
+        fan_in = in_channels * self.kernel_size[0] * self.kernel_size[1]
+        std = math.sqrt(2.0 / fan_in)
+        self.weight = nn.Parameter(torch.randn(out_channels, in_channels, self.kernel_size[0], self.kernel_size[1]) * std)
 
         # define bias if exists (bias applied on each convolution across each out channel)
         if bias:
-            self.bias = nn.Parameter(torch.randn(out_channels))
+            self.bias = nn.Parameter(torch.zeros(out_channels))
         else:
             self.bias = None
 
@@ -94,95 +289,19 @@ class Conv2D(nn.Module):
     def forward(self, x: torch.tensor) -> torch.tensor:
         return self.convolve_im2col_fast(x)
 
+
     def _convolve_brute(self, x: torch.tensor) -> torch.tensor:
-        # get relevant variables
-        batch_size, in_channels, in_height, in_width = x.shape
-        out_channels, in_channels, kernel_height, kernel_width = self.weight.shape
-
-        # total input size = (in_height + 2 * self.padding_height)
-        # pixels covered by a given kernel is (kernel_size - 1) * dilation + 1
-        # stride tells you the gap between each kernel application
-        
-
-        out_height = (in_height + 2 * self.padding[0] - self.dilation[0] * (kernel_height - 1) - 1) // self.stride[0] + 1
-        out_width = (in_width + 2 * self.padding[1] - self.dilation[1] * (kernel_width - 1) - 1) // self.stride[1] + 1
-
-        # okay technically number of legal positions is total spaces heff = (in_height + 2 * padding_size) - keff ( (kernel_size - 1) * dilation + 1 ) + 1) + 1
-
-        # now we want to 0 index because otherwise for a given stride the possible pos is pos % stride == 1 (since that ensures stride to the left). 0 index, and then we can just do pos % stride == 0
-
-        # So then becomes (heff - keff) is 0 indexed position. We can divide by stride now to get all possible positions that have stride * k to the left (hence valid) -> (heff - keff) // stride.
-
-        # but we know 0 position is valid so + 1. 
-
-        # this results in (in_height + 2 * padding_size - true_kernel_size) // stride + 1
-
-        # now do dumb looping
-
-        output = torch.zeros(batch_size, out_channels, out_height, out_width)
-
-        for b in range(batch_size):
-            for oc in range(out_channels):
-                for oh in range(out_height):
-                    for ow in range(out_width):
-                        # build accumulator
-                        acc = 0
-                        for ic in range(in_channels):
-                            for kh in range(kernel_height):
-                                for kw in range(kernel_width):
-                                    # first calculate input coordinates (start h and w). 
-                                    # note padding exists to the left of any index. Must provide index corrective factor of -padding to get true index since accessible kernel
-                                    ih = oh * self.stride[0] - self.padding[0] + self.dilation[0] * kh
-                                    iw = ow * self.stride[1] - self.padding[1] + self.dilation[1] * kw
-
-                                    if ih >= 0 and iw >= 0 and ih < in_height and iw < in_width:
-                                        # if in range, now lets do the multiply
-                                        acc += x[b, ic, ih, iw] * self.weight[oc, ic, kh, kw]
-
-                        if self.bias is not None:
-                            acc += self.bias[oc]
-
-                        if self.activation is not None:
-                            acc = self.activation(acc)
-                        
-                        output[b, oc, oh, ow] = acc
-
-        return output
+        return convolve_brute(x, self.weight, self.bias, self.activation, self.stride, self.padding, self.dilation)
 
     def convolve_im2col_slow(self, x: torch.Tensor) -> torch.Tensor:
-        # okay similar idea but we convert all these into cols
-
-        # this time we want to preapply padding so that we don't have to do boundary checks
-        x_padded = F.pad(x, (self.padding[1], self.padding[1], self.padding[0], self.padding[0]))
-        
-        # get relevant variables
-        batch_size, in_channels, in_height, in_width = x_padded.shape
-        out_channels, in_channels, kernel_height, kernel_width = self.weight.shape
-
-        # total input size = (in_height + 2 * self.padding_height)
-        # pixels covered by a given kernel is (kernel_size - 1) * dilation + 1
-        # stride tells you the gap between each kernel application
-        
-        out_height = (in_height - self.dilation[0] * (kernel_height - 1) - 1) // self.stride[0] + 1
-        out_width = (in_width - self.dilation[1] * (kernel_width - 1) - 1) // self.stride[1] + 1
-
-        # now we want to create the im2col matrix. 
-        cols = []
-
-        # reshape to simplify
-
-        k_effh = self.dilation[0] * (kernel_height - 1) + 1
-        k_effw = self.dilation[1] * (kernel_width - 1) + 1
-
-        for oh in range(out_height):
-            for ow in range(out_width):
-                oh_end = oh * self.stride[0] + k_effh
-                ow_end = ow * self.stride[1] + k_effw
-                row = x_padded[:, :, oh * self.stride[0]:oh_end:self.dilation[0], ow * self.stride[1]:ow_end:self.dilation[1]]
-                row = row.reshape(batch_size, -1)
-                cols.append(row)
-
-        cols = torch.stack(cols, dim=1)
+        cols, out_height, out_width = im2col_slow(x, self.kernel_size, self.stride, self.padding, self.dilation)
+        batch_size = x.shape[0] if len(x.shape) == 4 else 1 # Wait original x_padded.shape used
+        if len(x.shape) == 3:
+            batch_size = 1 # though the original code assumes 4D 
+        else:
+            batch_size = x.shape[0]
+            
+        out_channels = self.weight.shape[0]
 
         kernel = self.weight.reshape(out_channels, -1)
 
@@ -198,84 +317,9 @@ class Conv2D(nn.Module):
 
         return result
 
-    def _check_positive(self, param, param_name, strict=True):
-        cond = all(p > 0 for p in param) if strict else all(p >= 0 for p in param)
-        torch._check(
-            cond, lambda: f"{param_name} should be greater than zero, but got {param}"
-        )
-
-    def _check_size_2(self, param, param_name):
-        # check if either int or len <= 2
-        torch._check(len(param) <= 2, lambda: f"{param_name} should be size 2")
-
     def convolve_im2col_fast(self, x: torch.Tensor) -> torch.Tensor:
-        self._check_size_2(self.kernel_size, "kernel_size")
-        self._check_size_2(self.dilation, "dilation")
-        self._check_size_2(self.padding, "padding")
-        self._check_size_2(self.stride, "stride")
-
-        self._check_positive(self.kernel_size, "kernel_size")
-        self._check_positive(self.dilation, "dilation")
-        self._check_positive(self.padding, "padding", strict=False)
-        self._check_positive(self.stride, "stride")
-
-        # get relevant variables
-        shape = x.shape
-        ndims = len(x.shape)
-
-        torch._check(
-            ndims in (3,4) and all(d != 0 for d in shape[-3:]),
-            lambda: "Expected 3D or 4D (batch mode) tensor for input with possible 0 batch size "
-            f"and non-zero dimensions, but got: {tuple(shape)}",
-        )
-
-        # output check
-        output_shape = tuple(
-            (out + 2 * pad - dil * (ker - 1) - 1) // st + 1
-            for out, pad, dil, ker, st in zip(
-                shape[-2:], self.padding, self.dilation, self.kernel_size, self.stride
-            )
-        )
-
-        torch._check(
-            all(c > 0 for c in output_shape),
-            lambda: f"Given an input withs shape {shape[-2:]}, "
-            f"kernel size {self.kernel_size}, dilation {self.dilation}, "
-            f"padding {self.padding}, stride {self.stride}, "
-            f"the calculated shape of the sliding blocks is of {output_shape} "
-            "but each of the components of output shape must be at least 1"
-        )
-
-        # base checks completed.
-
-        # if not batched, batch
-        if ndims == 3:
-            x = x.unsqueeze(0)
-
-        batch_dim, channel_dim, input_h, input_w = x.shape
-
-        # block indices
-        blocks_row_indices = _im2col_col2im_indices_along_dim(
-            input_h, self.kernel_size[0], self.dilation[0], self.padding[0], self.stride[0], x.device
-        )
-        blocks_col_indices = _im2col_col2im_indices_along_dim(
-            input_w, self.kernel_size[1], self.dilation[1], self.padding[1], self.stride[1], x.device
-        )
-        
-
-        # pad input. F.pad takes (pad_left, pad_right, pad_top, pad_bottom) [BAD]
-        padded_input = F.pad(x, (self.padding[1], self.padding[1], self.padding[0], self.padding[0]))
-
-        blocks_row_indices = blocks_row_indices.unsqueeze(-1).unsqueeze(-1)
-        output = padded_input[:, :, blocks_row_indices, blocks_col_indices] # (B, C, KH, OH, KW, OW)
-        output = output.permute(0, 1, 2, 4, 3, 5) # (B, C, KH, KW, OH, OW)
-
-        # get number of blocks for final reshape
-        num_blocks_row = blocks_row_indices.size(1)
-        num_blocks_col = blocks_col_indices.size(1)
-
-        output = output.reshape(batch_dim, channel_dim * self.kernel_size[0] * self.kernel_size[1], num_blocks_row * num_blocks_col) # now we get (B, true matrix needed for conv (kernel * in_channels), number of such blocks)
-        output = output.permute(0, 2, 1) # (B, num_blocks, true matrix needed for conv (kernel * in_channels))
+        output, output_shape = im2col_fast(x, self.kernel_size, self.stride, self.padding, self.dilation)
+        batch_dim = x.shape[0] if len(x.shape) == 4 else 1
 
         # self.weight currently is (out_channels, in_channels, kernel_height, kernel_width)
         # convert to flattened
@@ -284,6 +328,41 @@ class Conv2D(nn.Module):
         result = result.reshape(batch_dim, self.out_channels, *output_shape)
         return result
 
+class Pool2D(nn.Module):
+    def __init__(self, pool="max", kernel_size=2, stride=2, padding=0, dilation=1):
+        super().__init__()
+        self.pool = pool
+        if isinstance(kernel_size, int):
+            self.kernel_size = (kernel_size, kernel_size)
+        elif isinstance(kernel_size, tuple):
+            self.kernel_size = kernel_size
+        else:
+            raise ValueError(f"Kernel size {kernel_size} not supported")
+
+        if isinstance(stride, int):
+            self.stride = (stride, stride)
+        elif isinstance(stride, tuple):
+            self.stride = stride
+        else:
+            raise ValueError(f"Stride {stride} not supported")
+
+        if isinstance(padding, int):
+            self.padding = (padding, padding)
+        elif isinstance(padding, tuple):
+            self.padding = padding
+        else:
+            raise ValueError(f"Padding {padding} not supported")
+
+        if isinstance(dilation, int):
+            self.dilation = (dilation, dilation)
+        elif isinstance(dilation, tuple):
+            self.dilation = dilation
+        else:
+            raise ValueError(f"Dilation {dilation} not supported")
+
+    def forward(self, x):
+        return im2col_fast(x, self.kernel_size, self.stride, self.padding, self.dilation, pool=self.pool)
+
 class CNN_Base(nn.Module):
     def __init__(self, in_channels, out_channels, bias=True, activation="relu", residuals=False):
         super().__init__()
@@ -291,36 +370,45 @@ class CNN_Base(nn.Module):
         if residuals:
             # in_shape must match out_shape for residuals. So the kernel op cannot change the shape
             self.conv1 = Conv2D(in_channels, in_channels, kernel_size=3, stride=1, padding=1, bias=bias, activation=activation)
+            # non changing pool
+            self.pool1 = Pool2D(pool="max", kernel_size=3, stride=1, padding=1)
             self.conv2 = Conv2D(in_channels, in_channels, kernel_size=3, stride=1, padding=1, bias=bias, activation=activation)
+            self.pool2 = Pool2D(pool="max", kernel_size=3, stride=1, padding=1)
             self.conv3 = Conv2D(in_channels, in_channels, kernel_size=3, stride=1, padding=1, bias=bias, activation=activation)
+            self.pool3 = Pool2D(pool="max", kernel_size=3, stride=1, padding=1)
             self.conv4 = Conv2D(in_channels, in_channels, kernel_size=3, stride=1, padding=1, bias=bias, activation=activation)
+            self.pool4 = Pool2D(pool="max", kernel_size=3, stride=1, padding=1)
             self.fc1 = nn.Linear(in_channels * 28 * 28, 10)
         else:
             self.conv1 = Conv2D(in_channels, 16, kernel_size=3, stride=1, padding=1, bias=bias, activation=activation)
+            self.pool1 = Pool2D(pool="max", kernel_size=3, stride=1, padding=1)
             self.conv2 = Conv2D(16, 32, kernel_size=3, stride=1, padding=1, bias=bias, activation=activation)
+            self.pool2 = Pool2D(pool="max", kernel_size=3, stride=1, padding=1)
             self.conv3 = Conv2D(32, 64, kernel_size=3, stride=1, padding=1, bias=bias, activation=activation)
+            self.pool3 = Pool2D(pool="max", kernel_size=3, stride=1, padding=1)
             self.conv4 = Conv2D(64, 128, kernel_size=3, stride=1, padding=1, bias=bias, activation=activation)
+            self.pool4 = Pool2D(pool="max", kernel_size=3, stride=1, padding=1)
+            
             # calculate the flattened size
             self.fc1 = nn.LazyLinear(out_features=10)
 
     def forward(self, x):
         if self.residuals:
-            x = x + self.conv1(x)
+            x = x + self.pool1(self.conv1(x))
         else:
-            x = self.conv1(x)
+            x = self.pool1(self.conv1(x))
         if self.residuals:
-            x = x + self.conv2(x)
+            x = x + self.pool2(self.conv2(x))
         else:
-            x = self.conv2(x)
+            x = self.pool2(self.conv2(x))
         if self.residuals:
-            x = x + self.conv3(x)
+            x = x + self.pool3(self.conv3(x))
         else:
-            x = self.conv3(x)
-        
+            x = self.pool3(self.conv3(x))
         if self.residuals:
-            x = x + self.conv4(x)
+            x = x + self.pool4(self.conv4(x))
         else:
-            x = self.conv4(x)
+            x = self.pool4(self.conv4(x))
         x = x.reshape(x.shape[0], -1)
         x = self.fc1(x)
         return x

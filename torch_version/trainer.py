@@ -59,15 +59,21 @@ def load_data(data_dir: Path = Path("../data"), flatten: bool = False):
 def train(model, dataloader, optimizer, loss_fn, device):
     model.train()
     total_loss = 0
-    for batch in dataloader:
+    for batch_idx, batch in enumerate(dataloader):
         x, y = batch
         x, y = x.to(device), y.to(device)
         optimizer.zero_grad()
         y_pred = model(x)
         loss_val = loss_fn(y_pred, y)
+        print(f"Batch: {batch_idx}, Loss: {loss_val.item()}")
         loss_val.backward()
         optimizer.step()
         total_loss += loss_val.item()
+
+        # institute early stopping if loss is less than 0.1
+        if loss_val.item() < 0.1:
+            print("Early stopping triggered")
+            break
     return total_loss / len(dataloader)
 
 def evaluate(model, dataloader, loss_fn, device):

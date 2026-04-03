@@ -1,6 +1,6 @@
 # MNIST from Scratch
 
-A faithful reproduction of the classic MNIST handwritten digit classification, built from the ground up. This project is both a personal exercise but intended to showcase how to rebuild foundational deep learning architectures and training pipelines from scratch, rather than relying solely on high-level frameworks. 
+Reproduced MNIST handwritten digit classification, ground up. Intended to showcase how to rebuild foundational deep learning architectures and training pipelines from scratch, rather than relying solely on high-level frameworks. 
 
 The plan is to start by training models using PyTorch, and then systematically peel back the layers—replacing modules, the autograd engine, and the optimizer—until everything is running on pure NumPy.
 
@@ -14,6 +14,7 @@ The plan is to start by training models using PyTorch, and then systematically p
     - `im2col` matrix multiplication variants:
       - Slow, loop-based implementation (`convolve_im2col_slow`)
       - Fast, fully vectorized implementation (`convolve_im2col_fast`)
+  - [x] Implement pooling layers (e.g., MaxPool2d, AvgPool2d) for CNNs.
 - **Phase 2: Dropping PyTorch Components**
   - [ ] Write a custom auto-grad engine in Python/NumPy to replace `loss.backward()`.
   - [ ] Implement custom optimizers (e.g., AdamW, SGD) to replace `torch.optim`.
@@ -23,9 +24,13 @@ The plan is to start by training models using PyTorch, and then systematically p
 ## Project Structure
 
 - `data/` - Expects the raw MNIST dataset (`*-idx*-ubyte` files).
-- `mnist_mlp.py` - Custom MLP and barebones Linear layer implementation.
-- `mnist_cnn.py` - Custom CNN architecture and Conv2D implementations (brute force, loop-based im2col, vectorized im2col).
-- `trainer_torch.py` - The main training loop, evaluation code, and logic to handle the `struct` parsing of MNIST's native IDX file format.
+- `torch_version/` - The PyTorch-based implementation.
+  - `mnist_mlp.py` - Custom MLP and barebones Linear layer implementation.
+  - `mnist_cnn.py` - Custom CNN architecture and Conv2D implementations (brute force, loop-based im2col, vectorized im2col).
+  - `trainer.py` - The main training loop, evaluation code, and logic to handle the `struct` parsing of MNIST's native IDX file format.
+- `numpy_version/` - The pure NumPy implementation (in progress).
+  - `mnist_mlp.py` - Custom MLP implementation.
+  - `autograd.py` - Custom autograd engine in Python/NumPy.
 - `download.py` - Script to download the raw MNIST dataset.
 
 ## Usage
@@ -33,5 +38,5 @@ The plan is to start by training models using PyTorch, and then systematically p
 1. Download the raw MNIST `.idx` and `.idx3/1-ubyte` binaries into the `data/` directory. Run with python `download.py`
 2. Run the PyTorch training loop:
    ```bash
-   python trainer_torch.py
+   python torch_version/trainer.py
    ```
