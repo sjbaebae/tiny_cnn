@@ -1,16 +1,3 @@
-from nn import Module
-import numpy as np
-
-class Activation(Module):
-    def __init__(self):
-        super().__init__()
-    
-    def forward(self, x: np.ndarray):
-        pass
-    
-    def backward(self, x: np.ndarray):
-        pass
-
 def relu(x: np.ndarray): 
     return x.clip(min=0)
 
