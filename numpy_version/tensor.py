@@ -2,12 +2,23 @@ import numpy as np
 import nn
 from nn.backward.core import AddBackward, SubBackward, MulBackward, DivBackward, PowBackward, NegBackward, AbsBackward, MatmulBackward, SliceBackward, PermuteBackward, ViewBackward, ReshapeBackward
 
+# torch style no_grad guard
+_grad_enabled = True
+
+class no_grad:
+    global _grad_enabled
+    def __enter__(self):
+        self._grad_enabled = _grad_enabled # what was it before entering this?
+        _grad_enabled = False
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        _grad_enabled = self._grad_enabled
+
+
 class Tensor:
     def __init__(self, data: np.ndarray, requires_grad: bool = False, grad_fn = None):
         self.data = data
         self.requires_grad = requires_grad
-        if self.is_leaf:
-            self.grad = np.zeros_like(data)
         self.grad_fn = grad_fn
     
     def __add__(self, other):
@@ -54,16 +65,6 @@ class Tensor:
     def __setitem__(self, key, value):
         self.data[key] = value
 
-    # SET ATTRIBUTE DOES NOT EXIST. NO NEED FOR TENSORS
-    
-    def __getattr__(self, name):
-        # forward to numpy data
-        if self.requires_grad:
-            # how do we do grad flow? block for now
-            raise AttributeError(f"Cannot access attribute {name} on Tensor with requires_grad=True")
-        else:
-            return self.data.__getattribute__(name)
-
     def __matmul__(self, other):
         result = Tensor(self.data @ other.data, requires_grad = self.requires_grad or other.requires_grad)
         result.grad_fn = MatmulBackward(self, other)
@@ -99,9 +100,30 @@ class Tensor:
     def is_leaf(self):
         return self.requires_grad and self.grad_fn is None
 
+    @property
+    def shape(self):
+        return self.data.shape
+    
+    @property
+    def dtype(self):
+        return self.data.dtype
+    
+    @property
+    def ndim(self):
+        return self.data.ndim
+    
+    @property
+    def size(self):
+        return self.data.size
+    
+    @property
+    def T(self):
+        return Tensor(self.data.T, requires_grad = self.requires_grad)
+
 # Parameter (autotrack weights)
-class Parameter:
-    def __init__(self, data: np.ndarray, requires_grad: bool = True):
-        self.data = data
-        self.requires_grad = requires_grad
+class Parameter(Tensor):
+    def __init__(self, data: Tensor):
+        super().__init__(data.data, requires_grad=True)
+        
+        
         
