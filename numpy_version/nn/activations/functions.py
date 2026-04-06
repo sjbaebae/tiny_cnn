@@ -1,3 +1,5 @@
+import numpy as np
+
 def relu(x: np.ndarray): 
     return x.clip(min=0)
 
@@ -15,4 +17,6 @@ def tanh(x: np.ndarray):
 
 def softmax(x: np.ndarray): 
     # shape of x: (batch_size, num_classes)
-    return np.exp(x) / np.sum(np.exp(x), axis = 1, keepdims = True)
+    # subtract max for numerical stability
+    x_shift = x - np.max(x, axis = 1, keepdims = True)
+    return np.exp(x_shift) / np.sum(np.exp(x_shift), axis = 1, keepdims = True)
