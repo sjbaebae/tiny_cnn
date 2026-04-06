@@ -1,6 +1,6 @@
 import numpy as np
 import nn
-from nn.backward.core import AddBackward, SubBackward, MulBackward, DivBackward, PowBackward, NegBackward, AbsBackward, MatmulBackward, SliceBackward, PermuteBackward, ViewBackward
+from nn.backward.core import AddBackward, SubBackward, MulBackward, DivBackward, PowBackward, NegBackward, AbsBackward, MatmulBackward, SliceBackward, PermuteBackward, ViewBackward, ReshapeBackward
 
 class Tensor:
     def __init__(self, data: np.ndarray, requires_grad: bool = False, grad_fn = None):
@@ -70,7 +70,10 @@ class Tensor:
         return result
     
     def reshape(self, shape: tuple): 
-        self.data.reshape(shape)
+        result = Tensor(self.data.reshape(shape), requires_grad = self.requires_grad)
+        # pass original tensor so we can use as reference
+        result.grad_fn = ReshapeBackward(self, self)
+        return result
 
     def permute(self, dims: tuple):
         result = Tensor(self.data.transpose(dims), requires_grad = self.requires_grad)
