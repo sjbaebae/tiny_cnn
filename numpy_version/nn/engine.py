@@ -26,6 +26,8 @@ class Engine:
         
         if root_tensor.grad_fn is not None:
             # this is the starting node
+            # add initial dependency explicitly. No dependencies on root
+            dependencies[root_tensor.grad_fn] = 0
             dfs(root_tensor.grad_fn)
         
         return dependencies
