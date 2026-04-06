@@ -9,9 +9,6 @@ class Tensor:
         if self.is_leaf:
             self.grad = np.zeros_like(data)
         self.grad_fn = grad_fn
-
-    def backward(self, grad_in: np.ndarray = np.array([1])):
-        self.grad_fn(grad_in)
     
     def __add__(self, other):
         raw_data = self.data + other.data
@@ -90,13 +87,10 @@ class Tensor:
         result.grad_fn = SliceBackward(self, key)
         return result
 
-    @property
-    def train(self):
-        self.training = True
-    
-    @property
-    def eval(self):
-        self.training = False
+    # main function for engine
+    def backward(self):
+        engine = nn.Engine()
+        engine.backward(self)
 
     @property
     def is_leaf(self):

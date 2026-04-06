@@ -51,16 +51,19 @@ class Engine:
                 outputs = (outputs,)
 
             for idx, edge in enumerate(node.next_edges):
+                if edge is None:
+                    continue
                 edge: Edge
                 parent: Node = edge.fn
                 not_ready[parent].append((idx, outputs[idx]))
                 dependencies[parent] -= 1
                 if dependencies[parent] == 0:
-                    grads = not_ready[parent]
+                    grad_tuples = not_ready[parent]
+                    grad_arrays = [g for _, g in sorted(grad_tuples, key=lambda x: x[0])]
                     # only when all dependencies cleared we push gradient to be used on a node. 
-                    total = grads[0]
+                    total = grad_arrays[0]
                     # numpy will auto handle shape braodcasting per summation.
-                    for g in grads[1:]:
+                    for g in grad_arrays[1:]:
                         total = total + g
                     del not_ready[parent]
                     queue.append((parent, total))

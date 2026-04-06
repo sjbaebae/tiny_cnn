@@ -1,17 +1,18 @@
 from .main import Node, Edge
 import numpy as np
 from ..activations.functions import softmax
+from .core import get_edge
 
 class ReluBackward(Node):
     def __init__(self, left):
-        super().__init__(edges=(Edge(left.grad_fn, 0),), saved_tensors=(left,))
+        super().__init__(edges=(get_edge(left),), saved_tensors=(left,))
     
     def apply(self, grad_in: np.ndarray):
         return grad_in * (self.saved_tensors[0].data > 0)
 
 class GeluBackward(Node):
     def __init__(self, left):
-        super().__init__(edges=(Edge(left.grad_fn, 0),), saved_tensors=(left,))
+        super().__init__(edges=(get_edge(left),), saved_tensors=(left,))
 
     
     def apply(self, grad_in: np.ndarray):
@@ -25,7 +26,7 @@ class GeluBackward(Node):
 
 class SiluBackward(Node):
     def __init__(self, left):
-        super().__init__(edges=(Edge(left.grad_fn, 0),), saved_tensors=(left,))
+        super().__init__(edges=(get_edge(left),), saved_tensors=(left,))
     
     def apply(self, grad_in: np.ndarray):
         # y = x * (1 / (1 + np.exp(-x)))
@@ -36,7 +37,7 @@ class SiluBackward(Node):
 
 class SigmoidBackward(Node):
     def __init__(self, left):
-        super().__init__(edges=(Edge(left.grad_fn, 0),), saved_tensors=(left,))
+        super().__init__(edges=(get_edge(left),), saved_tensors=(left,))
     
     def apply(self, grad_in: np.ndarray):
         # y = 1 / (1 + np.exp(-x))
@@ -46,7 +47,7 @@ class SigmoidBackward(Node):
 
 class TanhBackward(Node):
     def __init__(self, left):
-        super().__init__(edges=(Edge(left.grad_fn, 0),), saved_tensors=(left,))
+        super().__init__(edges=(get_edge(left),), saved_tensors=(left,))
     
     def apply(self, grad_in: np.ndarray):
         # y = tanh(x)
@@ -56,7 +57,7 @@ class TanhBackward(Node):
         
 class SoftmaxBackward(Node):
     def __init__(self, tensor):
-        super().__init__(edges=(Edge(tensor.grad_fn, 0),), saved_tensors=(tensor,))
+        super().__init__(edges=(get_edge(tensor),), saved_tensors=(tensor,))
     
     def apply(self, grad_in: np.ndarray):
         # dont build full matrix. instead, use the fact that dy_dx = y * (1 - y), where y can reuse the softmax function

@@ -1,4 +1,5 @@
 from numpy_version.nn.backward.activations import ReluBackward, GeluBackward, SiluBackward, SigmoidBackward, TanhBackward
+import numpy as np
 from ...tensor import Tensor
 from ..activations.functions import relu, gelu, silu, sigmoid, tanh
 
@@ -17,8 +18,8 @@ class Module:
 class Linear(Module):
     def __init__(self, in_features: int, out_features: int):
         # kaiming normalization
-        self.weight = Tensor(np.random.randn(in_features, out_features) * np.sqrt(2 / in_features))
-        self.bias = Tensor(np.zeros(out_features))
+        self.weight = Tensor(np.random.randn(in_features, out_features) * np.sqrt(2 / in_features), requires_grad=True)
+        self.bias = Tensor(np.zeros(out_features), requires_grad=True)
     
     def forward(self, x: Tensor):
         return x @ self.weight + self.bias
@@ -79,6 +80,9 @@ class Tanh(Activation):
         super().__init__()
     
     def forward(self, x: Tensor):
-        return tanh(x)
+        # backward function
+        out = Tensor(tanh(x.data), requires_grad = x.requires_grad)
+        out.grad_fn = TanhBackward(x)
+        return out
 
 # TAYLOR SERIES EXPANSION -> SUM(f'(x) * (x - x_0)^n / n!)
