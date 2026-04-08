@@ -1,5 +1,5 @@
 from .backward import Node, Edge
-from ..tensor import Tensor
+from tensor import Tensor
 from collections import deque, defaultdict
 import numpy as np
 # backward gradients engine

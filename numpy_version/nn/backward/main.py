@@ -1,5 +1,4 @@
 import numpy as np
-from ...tensor import Tensor
 # backward op (node) -> edge is then tensor. Backward ops lead back to tensors -> to ops. Directed acyclic graph
 
 class Edge:

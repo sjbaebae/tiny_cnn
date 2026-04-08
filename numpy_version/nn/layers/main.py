@@ -1,6 +1,6 @@
-from numpy_version.nn.backward.activations import ReluBackward, GeluBackward, SiluBackward, SigmoidBackward, TanhBackward
+from ..backward.activations import ReluBackward, GeluBackward, SiluBackward, SigmoidBackward, TanhBackward
 import numpy as np
-from ...tensor import Tensor
+from tensor import Tensor
 from ..activations.functions import relu, gelu, silu, sigmoid, tanh
 
 class Module:
@@ -86,3 +86,44 @@ class Tanh(Activation):
         return out
 
 # TAYLOR SERIES EXPANSION -> SUM(f'(x) * (x - x_0)^n / n!)
+
+
+class Conv2d(Module):
+    def __init__(self, in_channels: int, out_channels: int, kernel_size: int | tuple[int, int], stride: int | tuple[int, int] = 1, padding: int | tuple[int, int] = 0, dilation: int | tuple[int, int] = 1):
+        super().__init__()
+        # conv2d layers
+        self.weight = Tensor(np.random.randn(out_channels, in_channels, kernel_size, kernel_size) * np.sqrt(2 / (in_channels * kernel_size * kernel_size)), requires_grad=True)
+        self.bias = Tensor(np.zeros(out_channels), requires_grad=True)
+
+        if isinstance(kernel_size, int):
+            self.kernel_size = (kernel_size, kernel_size)
+        else:
+            self.kernel_size = kernel_size
+        
+        if isinstance(stride, int):
+            self.stride = (stride, stride)
+        else:
+            self.stride = stride
+        
+        if isinstance(padding, int):
+            self.padding = (padding, padding)
+        else:
+            self.padding = padding
+        
+        if isinstance(dilation, int):
+            self.dilation = (dilation, dilation)
+        else:
+            self.dilation = dilation
+
+    #  need a vectorized conv2d fast from cols
+
+    # for this will need a helper function to get all the indices I want then prepare from extraction numpy
+    
+    def forward(self, x: Tensor):
+        # forward with conv2d fast.
+        out = Tensor(conv2d(x.data, self.weight.data, self.bias.data, self.stride, self.padding, self.dilation), requires_grad = x.requires_grad)
+        out.grad_fn = Conv2dBackward(x, self.weight, self.bias, self.stride, self.padding, self.dilation)
+        return out
+            
+        
+        
