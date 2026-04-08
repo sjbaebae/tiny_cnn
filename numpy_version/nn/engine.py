@@ -46,7 +46,7 @@ class Engine:
                 # no grads to push
                 continue
 
-            outputs = node.apply(inbuf)
+            outputs = node.backward(inbuf)
 
             # guard against tuple breaking
             if not isinstance(outputs, tuple):

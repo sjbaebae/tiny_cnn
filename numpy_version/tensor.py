@@ -1,19 +1,5 @@
 import numpy as np
-import nn
-from nn.backward.core import AddBackward, SubBackward, MulBackward, DivBackward, PowBackward, NegBackward, AbsBackward, MatmulBackward, SliceBackward, PermuteBackward, ViewBackward, ReshapeBackward
-
-# torch style no_grad guard
-_grad_enabled = True
-
-class no_grad:
-    global _grad_enabled
-    def __enter__(self):
-        self._grad_enabled = _grad_enabled # what was it before entering this?
-        _grad_enabled = False
-    
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        _grad_enabled = self._grad_enabled
-
+from nn.backward.main import no_grad
 
 class Tensor:
     def __init__(self, data: np.ndarray, requires_grad: bool = False, grad_fn = None):
@@ -22,39 +8,32 @@ class Tensor:
         self.grad_fn = grad_fn
     
     def __add__(self, other):
-        raw_data = self.data + other.data
-        result = Tensor(raw_data, requires_grad = self.requires_grad or other.requires_grad, grad_fn = nn.backward.core.AddBackward(self, other))
-        return result
+        from nn.backward.core import AddBackward
+        return AddBackward.apply(self, other)
     
     def __sub__(self, other):
-        raw_data = self.data - other.data
-        result = Tensor(raw_data, requires_grad = self.requires_grad or other.requires_grad, grad_fn = SubBackward(self, other))
-        return result
+        from nn.backward.core import SubBackward
+        return SubBackward.apply(self, other)
     
     def __mul__(self, other):
-        result = Tensor(self.data * other.data, requires_grad = self.requires_grad or other.requires_grad)
-        result.grad_fn = MulBackward(self, other)
-        return result
+        from nn.backward.core import MulBackward
+        return MulBackward.apply(self, other)
     
     def __truediv__(self, other):
-        result = Tensor(self.data / other.data, requires_grad = self.requires_grad or other.requires_grad)
-        result.grad_fn = DivBackward(self, other)
-        return result
+        from nn.backward.core import DivBackward
+        return DivBackward.apply(self, other)
     
     def __pow__(self, other):
-        result = Tensor(self.data ** other.data, requires_grad = self.requires_grad or other.requires_grad)
-        result.grad_fn = PowBackward(self, other)
-        return result
+        from nn.backward.core import PowBackward
+        return PowBackward.apply(self, other)
     
     def __neg__(self):
-        result = Tensor(-self.data, requires_grad = self.requires_grad)
-        result.grad_fn = NegBackward(self)
-        return result
+        from nn.backward.core import NegBackward
+        return NegBackward.apply(self)
     
     def __abs__(self):
-        result = Tensor(np.abs(self.data), requires_grad = self.requires_grad)
-        result.grad_fn = AbsBackward(self)
-        return result
+        from nn.backward.core import AbsBackward
+        return AbsBackward.apply(self)
     
     def __len__(self):
         return len(self.data)
@@ -66,34 +45,29 @@ class Tensor:
         self.data[key] = value
 
     def __matmul__(self, other):
-        result = Tensor(self.data @ other.data, requires_grad = self.requires_grad or other.requires_grad)
-        result.grad_fn = MatmulBackward(self, other)
-        return result
+        from nn.backward.core import MatmulBackward
+        return MatmulBackward.apply(self, other)
     
     def reshape(self, shape: tuple): 
-        result = Tensor(self.data.reshape(shape), requires_grad = self.requires_grad)
-        # pass original tensor so we can use as reference
-        result.grad_fn = ReshapeBackward(self, self)
-        return result
+        from nn.backward.core import ReshapeBackward
+        return ReshapeBackward.apply(self, shape)
 
     def permute(self, dims: tuple):
-        result = Tensor(self.data.transpose(dims), requires_grad = self.requires_grad)
-        result.grad_fn = PermuteBackward(self, dims)
-        return result
+        from nn.backward.core import PermuteBackward
+        return PermuteBackward.apply(self, dims)
 
     def view(self, shape: tuple):
-        result = Tensor(self.data.reshape(shape), requires_grad = self.requires_grad)
-        result.grad_fn = ViewBackward(self, shape)
-        return result
+        from nn.backward.core import ViewBackward
+        return ViewBackward.apply(self, shape)
 
     def slice(self, key):
-        result = Tensor(self.data[key], requires_grad = self.requires_grad)
-        result.grad_fn = SliceBackward(self, key)
-        return result
+        from nn.backward.core import SliceBackward
+        return SliceBackward.apply(self, key)
 
     # main function for engine
     def backward(self):
-        engine = nn.Engine()
+        from nn.engine import Engine
+        engine = Engine()
         engine.backward(self)
 
     @property
@@ -124,6 +98,3 @@ class Tensor:
 class Parameter(Tensor):
     def __init__(self, data: Tensor):
         super().__init__(data.data, requires_grad=True)
-        
-        
-        
