@@ -20,7 +20,7 @@ class Engine:
             visited.add(id(node))
             for edge in node.next_edges:
                 # edge.fn points to the next Node backward func
-                if edge.fn is not None:
+                if edge is not None and edge.fn is not None:
                     dependencies[edge.fn] += 1
                     dfs(edge.fn)
         

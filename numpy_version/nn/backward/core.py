@@ -183,3 +183,26 @@ class MatmulBackward(Function):
         grad_left = grad_in @ right_data.T
         grad_right = left_data.T @ grad_in
         return reduce_to_shape(grad_left, getattr(left_data, "shape", ())), reduce_to_shape(grad_right, getattr(right_data, "shape", ()))
+
+class SumBackward(Function):
+    @staticmethod
+    def forward(data, axis=None, keepdims=False):
+        return data.sum(axis=axis, keepdims=keepdims)
+
+    def __init__(self, tensor, axis=None, keepdims=False):
+        super().__init__(edges=(get_edge(tensor),), saved_tensors=())
+        self.data_shape = tensor.shape
+        self.axis = axis
+        self.keepdims = keepdims
+
+    def backward(self, grad_in: np.ndarray):
+        if self.axis is None:
+            # Summed over all elements: broadcast scalar gradient to original shape
+            return grad_in * np.ones(self.data_shape),
+        
+        # If summarized over a specific axis and dimensions were squeezed out,
+        # we reshape grad_in so it can be cleanly broadcasted against np.ones
+        if not self.keepdims:
+            grad_in = np.expand_dims(grad_in, axis=self.axis)
+            
+        return grad_in * np.ones(self.data_shape),

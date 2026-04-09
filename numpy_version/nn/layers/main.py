@@ -40,50 +40,35 @@ class Relu(Activation):
         super().__init__()
     
     def forward(self, x: Tensor):
-        # backward function
-        out = Tensor(relu(x.data), requires_grad = x.requires_grad)
-        out.grad_fn = ReluBackward(x)
-        return out
+        return ReluBackward.apply(x)
 
 class Gelu(Activation):
     def __init__(self):
         super().__init__()
     
     def forward(self, x: Tensor):
-        # backward function
-        out = Tensor(gelu(x.data), requires_grad = x.requires_grad)
-        out.grad_fn = GeluBackward(x)
-        return out
+        return GeluBackward.apply(x)
 
 class Silu(Activation):
     def __init__(self):
         super().__init__()
     
     def forward(self, x: Tensor):
-        # backward function
-        out = Tensor(silu(x.data), requires_grad = x.requires_grad)
-        out.grad_fn = SiluBackward(x)
-        return out
+        return SiluBackward.apply(x)
 
 class Sigmoid(Activation):
     def __init__(self):
         super().__init__()
     
     def forward(self, x: Tensor):
-        # backward function
-        out = Tensor(sigmoid(x.data), requires_grad = x.requires_grad)
-        out.grad_fn = SigmoidBackward(x)
-        return out
+        return SigmoidBackward.apply(x)
 
 class Tanh(Activation):
     def __init__(self):
         super().__init__()
     
     def forward(self, x: Tensor):
-        # backward function
-        out = Tensor(tanh(x.data), requires_grad = x.requires_grad)
-        out.grad_fn = TanhBackward(x)
-        return out
+        return TanhBackward.apply(x)
 
 # TAYLOR SERIES EXPANSION -> SUM(f'(x) * (x - x_0)^n / n!)
 

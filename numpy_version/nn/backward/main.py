@@ -21,8 +21,8 @@ class Edge:
         self.input_nr = input_nr
 
 class Node:
-    def __init__(self, next_edges: tuple[Edge, ...], saved_tensors=()):
-        self.next_edges = next_edges
+    def __init__(self, edges: tuple[Edge, ...] = (), saved_tensors=()):
+        self.next_edges = edges
         self.saved_tensors = saved_tensors
 
     def backward(self, grad_in):

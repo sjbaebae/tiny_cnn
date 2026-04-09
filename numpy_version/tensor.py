@@ -6,6 +6,7 @@ class Tensor:
         self.data = data
         self.requires_grad = requires_grad
         self.grad_fn = grad_fn
+        self.grad = None
     
     def __add__(self, other):
         from nn.backward.core import AddBackward
@@ -63,12 +64,19 @@ class Tensor:
     def slice(self, key):
         from nn.backward.core import SliceBackward
         return SliceBackward.apply(self, key)
+    
+    def sum(self, axis=None, keepdims=False):
+        from nn.backward.core import SumBackward
+        return SumBackward.apply(self, axis=axis, keepdims=keepdims)
 
     # main function for engine
     def backward(self):
         from nn.engine import Engine
         engine = Engine()
         engine.backward(self)
+
+    def __str__(self):
+        return f"Tensor: {self.data}, requires_grad: {self.requires_grad}"
 
     @property
     def is_leaf(self):

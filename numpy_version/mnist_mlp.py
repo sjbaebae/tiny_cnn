@@ -1,13 +1,14 @@
 import numpy as np
 
 # import linear layer
-from nn.layers import Linear
-from nn.activations.functions import relu, gelu, silu, sigmoid, tanh
+from nn.layers.main import Linear, Relu, Gelu, Silu, Sigmoid, Tanh
 
 # import Tensor
 from tensor import Tensor, no_grad
 
-class MLP(models.NN):
+from nn.layers import Module
+
+class MLP(Module):
     def __init__(self, in_features, out_features, bias = True, activation="relu"):
         super().__init__()
         self.l1 = Linear(in_features, out_features)
@@ -16,17 +17,19 @@ class MLP(models.NN):
         self.l4 = Linear(out_features, out_features)
         
         if activation == "relu":
-            self.activation = relu
+            self.activation = Relu()
         elif activation == "gelu":
-            self.activation = gelu
+            self.activation = Gelu()
         elif activation == "silu":
-            self.activation = silu
+            self.activation = Silu()
         elif activation == "sigmoid":
-            self.activation = sigmoid
+            self.activation = Sigmoid()
         elif activation == "tanh":
-            self.activation = tanh
+            self.activation = Tanh()
 
     def forward(self, x: Tensor):
+        if not isinstance(x, Tensor):
+            raise TypeError("Input must be a Tensor")
         x = self.l1(x)
         x = self.activation(x)
         x = self.l2(x)
@@ -43,4 +46,4 @@ class MLP(models.NN):
 
 with no_grad():
     basic_mlp = MLP(in_features=20, out_features=2)
-    print(basic_mlp(np.random.rand(20)))
+    print(basic_mlp(Tensor(np.random.rand(20))))
