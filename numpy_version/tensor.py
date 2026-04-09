@@ -97,6 +97,9 @@ class Tensor:
     def float(self):
         return Tensor(self.data.astype(np.float32), requires_grad=self.requires_grad)
 
+    def item(self):
+        return self.data.item()
+
     @property
     def is_leaf(self):
         return self.requires_grad and self.grad_fn is None

@@ -46,8 +46,8 @@ class Module:
 class Linear(Module):
     def __init__(self, in_features: int, out_features: int):
         # kaiming normalization. Parameters are autotracked by any module, will self register
-        self.weight = Parameter(np.random.randn(in_features, out_features) * np.sqrt(2 / in_features), requires_grad=True)
-        self.bias = Parameter(np.zeros(out_features), requires_grad=True)
+        self.weight = Parameter((np.random.randn(in_features, out_features) * np.sqrt(2 / in_features)).astype(np.float32), requires_grad=True)
+        self.bias = Parameter(np.zeros(out_features, dtype=np.float32), requires_grad=True)
     
     def forward(self, x: Tensor):
         return x @ self.weight + self.bias

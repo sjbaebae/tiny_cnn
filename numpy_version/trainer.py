@@ -3,7 +3,7 @@ import struct
 import os
 from pathlib import Path
 import PIL.Image as Image
-from tensor import Tensor
+from tensor import Tensor, no_grad
 # from mnist_cnn import CNN_Base
 from mnist_mlp import MLP
 # add optimizers
@@ -114,9 +114,9 @@ def train(model, dataloader, optimizer, loss_fn):
         total_loss += loss_val.item()
 
         # institute early stopping if loss is less than 0.1
-        if loss_val.item() < 0.1:
-            print("Early stopping triggered")
-            break
+        # if loss_val.item() < 0.1:
+        #     print("Early stopping triggered")
+        #     break
     return total_loss / len(dataloader)
 
 def evaluate(model, dataloader, loss_fn):
@@ -124,7 +124,7 @@ def evaluate(model, dataloader, loss_fn):
     total_loss = 0
     for batch in dataloader:
         x, y = batch
-        with torch.no_grad():
+        with no_grad():
             y_pred = model(x)
             loss_val = loss_fn(y_pred, y)
             total_loss += loss_val.item()
