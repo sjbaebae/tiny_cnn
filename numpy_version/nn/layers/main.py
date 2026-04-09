@@ -1,25 +1,53 @@
 from ..backward.activations import ReluBackward, GeluBackward, SiluBackward, SigmoidBackward, TanhBackward
 import numpy as np
-from tensor import Tensor
+from tensor import Tensor, Parameter
 from ..activations.functions import relu, gelu, silu, sigmoid, tanh
 
 class Module:
     def __init__(self):
         pass
+    # auto track parameters
+    def __setattr__(self, name, value):
+        from tensor import Parameter
+
+        if isinstance(value, Parameter):
+            if not hasattr(self, '_parameters'):
+                self._parameters = []
+            if value not in self._parameters:
+                self._parameters.append(value)
+        elif isinstance(value, Module):
+            if not hasattr(self, '_modules'):
+                self._modules = []
+            if value not in self._modules:
+                self._modules.append(value)
+        
+        # if not a parameter or module, just set the attribute
+        super().__setattr__(name, value)
+        
     def forward(self, x: Tensor):
         pass
+        
     def __call__(self, x: Tensor):
         return self.forward(x)
+        
     def train(self):
         self.training = True
+        
     def eval(self):
         self.training = False
+        
+    def parameters(self):
+        """Recursively gather all parameters from this module and its children."""
+        params = list(getattr(self, "_parameters", []))
+        for m in getattr(self, "_modules", []):
+            params.extend(m.parameters())
+        return params
 
 class Linear(Module):
     def __init__(self, in_features: int, out_features: int):
-        # kaiming normalization
-        self.weight = Tensor(np.random.randn(in_features, out_features) * np.sqrt(2 / in_features), requires_grad=True)
-        self.bias = Tensor(np.zeros(out_features), requires_grad=True)
+        # kaiming normalization. Parameters are autotracked by any module, will self register
+        self.weight = Parameter(np.random.randn(in_features, out_features) * np.sqrt(2 / in_features), requires_grad=True)
+        self.bias = Parameter(np.zeros(out_features), requires_grad=True)
     
     def forward(self, x: Tensor):
         return x @ self.weight + self.bias

@@ -9,12 +9,12 @@ from tensor import Tensor, no_grad
 from nn.layers import Module
 
 class MLP(Module):
-    def __init__(self, in_features, out_features, bias = True, activation="relu"):
+    def __init__(self, in_features, hidden_features, out_features, num_hidden_layers, bias = True, activation="relu"):
         super().__init__()
-        self.l1 = Linear(in_features, out_features)
-        self.l2 = Linear(out_features, out_features)
-        self.l3 = Linear(out_features, out_features)
-        self.l4 = Linear(out_features, out_features)
+        self.l1 = Linear(in_features, hidden_features)
+        self.l2 = Linear(hidden_features, hidden_features)
+        self.l3 = Linear(hidden_features, hidden_features)
+        self.l4 = Linear(hidden_features, out_features)
         
         if activation == "relu":
             self.activation = Relu()
@@ -44,6 +44,8 @@ class MLP(Module):
     def __call__(self, x):
         return self.forward(x)
 
-with no_grad():
-    basic_mlp = MLP(in_features=20, out_features=2)
-    print(basic_mlp(Tensor(np.random.rand(20))))
+
+if __name__ == "__main__":
+    with no_grad():
+        basic_mlp = MLP(in_features=20, out_features=2)
+        print(basic_mlp(Tensor(np.random.rand(20))))

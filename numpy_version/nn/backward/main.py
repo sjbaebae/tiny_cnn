@@ -26,7 +26,6 @@ class Node:
         self.saved_tensors = saved_tensors
 
     def backward(self, grad_in):
-        # apply to our set of edges iteratively
         raise NotImplementedError
 
 class Function(Node):
@@ -49,6 +48,8 @@ class Function(Node):
         
         # Build the backward node
         if requires_grad:
+            # should convert any tensor that is not a tensor to a tensor. This is to ensure backward gradients are computed correctly.
+            args = [Tensor(arg) if not isinstance(arg, Tensor) else arg for arg in args]
             out.grad_fn = cls(*args, **kwargs)
             
         return out

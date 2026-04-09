@@ -206,3 +206,35 @@ class SumBackward(Function):
             grad_in = np.expand_dims(grad_in, axis=self.axis)
             
         return grad_in * np.ones(self.data_shape),
+
+class UnsqueezeBackward(Function):
+    @staticmethod
+    def forward(data, dim):
+        return np.expand_dims(data, axis=dim)
+
+    def __init__(self, tensor, dim):
+        super().__init__(edges=(get_edge(tensor),), saved_tensors=())
+        self.data_shape = tensor.shape
+        self.dim = dim
+
+    def backward(self, grad_in: np.ndarray):
+        return np.squeeze(grad_in, axis=self.dim), 
+
+class LogBackward(Function):
+    @staticmethod
+    def forward(data, base=np.e):
+        # np.log(e) = 1, so np.log(data) / np.log(e) = np.log(data) which is the normal log base e form.
+        # if base is not e, it is equivalent to np.log(data) / np.log(base)
+        return np.log(data) / np.log(base)
+    
+    def __init__(self, tensor, base):
+        super().__init__(edges=(get_edge(tensor),), saved_tensors=(tensor,))
+        self.base = base
+        
+    def backward(self, grad_in: np.ndarray):
+        # gradient of ln is 1/x. For any of other bases, it is 1/(x * ln(base))
+        grad = 1 / (self.saved_tensors[0].data * np.log(self.base))
+        return grad * grad_in,
+        
+        
+        

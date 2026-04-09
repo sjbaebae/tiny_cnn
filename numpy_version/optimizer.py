@@ -1,6 +1,6 @@
 
 import numpy as np
-from .tensor import Parameter
+from tensor import Parameter
 
 class Optim:
     def __init__(self, params: list[Parameter]):
@@ -9,7 +9,7 @@ class Optim:
     def step(self):
         # specific to each optimizer
         pass
-    def zerograd(self):
+    def zero_grad(self):
         # will go through the list of parameters and zerograd them all
         for param in self.params:
             if param.requires_grad:

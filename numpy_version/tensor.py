@@ -49,11 +49,11 @@ class Tensor:
         from nn.backward.core import MatmulBackward
         return MatmulBackward.apply(self, other)
     
-    def reshape(self, shape: tuple): 
+    def reshape(self, *shape): 
         from nn.backward.core import ReshapeBackward
         return ReshapeBackward.apply(self, shape)
 
-    def permute(self, dims: tuple):
+    def permute(self, *dims):
         from nn.backward.core import PermuteBackward
         return PermuteBackward.apply(self, dims)
 
@@ -69,6 +69,15 @@ class Tensor:
         from nn.backward.core import SumBackward
         return SumBackward.apply(self, axis=axis, keepdims=keepdims)
 
+    def log(self):
+        from nn.backward.core import LogBackward
+        return LogBackward.apply(self)
+
+    @staticmethod
+    def softmax(x: 'Tensor'):
+        from nn.backward.activations import SoftmaxBackward
+        return SoftmaxBackward.apply(x)
+
     # main function for engine
     def backward(self):
         from nn.engine import Engine
@@ -76,7 +85,17 @@ class Tensor:
         engine.backward(self)
 
     def __str__(self):
-        return f"Tensor: {self.data}, requires_grad: {self.requires_grad}"
+        return f"Tensor: {self.data}, requires_grad: {self.requires_grad}"\
+
+    def unsqueeze(self, dim: int):
+        from nn.backward.core import UnsqueezeBackward
+        return UnsqueezeBackward.apply(self, dim)
+
+    def long(self):
+        return Tensor(self.data.astype(np.int64), requires_grad=self.requires_grad)
+
+    def float(self):
+        return Tensor(self.data.astype(np.float32), requires_grad=self.requires_grad)
 
     @property
     def is_leaf(self):
@@ -104,5 +123,5 @@ class Tensor:
 
 # Parameter (autotrack weights)
 class Parameter(Tensor):
-    def __init__(self, data: Tensor):
-        super().__init__(data.data, requires_grad=True)
+    def __init__(self, data: np.ndarray, requires_grad=True, grad_fn=None):
+        super().__init__(data, requires_grad=requires_grad, grad_fn=grad_fn)
