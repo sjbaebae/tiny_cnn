@@ -14,14 +14,22 @@ class CrossEntropyLoss(Loss):
         super().__init__()
     
     def __call__(self, y_pred: Tensor, y_true: Tensor):
-        # y_pred is logits
-        # y_true is one hot
-        # cross entropy loss
+        # y_pred is logits (batch_size, num_classes)
+        # y_true is class indices (batch_size,)
+        
+        # Determine batch_size and num_classes
+        batch_size = y_true.shape[0]
+        num_classes = y_pred.shape[1]
 
-        # cross entropy is -1 * sum(y_true * log(softmax(y_pred)))
+        # Produce one-hot using numpy
+        one_hot = np.zeros((batch_size, num_classes))
+        one_hot[np.arange(batch_size), y_true.data.astype(int)] = 1
+        y_true_one_hot = Tensor(one_hot)
 
-        summed_logits: Tensor = (y_true * (Tensor.softmax(y_pred)).log()).sum()
+        # cross entropy is -1/N * sum(y_true * log(softmax(y_pred)))
+        summed_logits: Tensor = (y_true_one_hot * (Tensor.softmax(y_pred) + 1e-9).log()).sum()
 
-        return -summed_logits
+        # Expected value, average by batch size
+        return -summed_logits / batch_size
         
         

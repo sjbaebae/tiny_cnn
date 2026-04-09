@@ -105,7 +105,7 @@ def train(model, dataloader, optimizer, loss_fn):
     total_loss = 0
     for batch_idx, batch in enumerate(dataloader):
         x, y = batch
-        optimizer.zerograd()
+        optimizer.zero_grad()
         y_pred = model(x)
         loss_val = loss_fn(y_pred, y)
         print(f"Batch: {batch_idx}, Loss: {loss_val.item()}")

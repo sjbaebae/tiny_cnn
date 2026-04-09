@@ -227,7 +227,7 @@ class LogBackward(Function):
         # if base is not e, it is equivalent to np.log(data) / np.log(base)
         return np.log(data) / np.log(base)
     
-    def __init__(self, tensor, base):
+    def __init__(self, tensor, base=np.e):
         super().__init__(edges=(get_edge(tensor),), saved_tensors=(tensor,))
         self.base = base
         
