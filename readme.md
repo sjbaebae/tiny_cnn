@@ -1,9 +1,8 @@
 # MNIST from Scratch
 
-Reproduced MNIST handwritten digit classification, ground up. Intended to showcase how to rebuild foundational deep learning architectures and training pipelines from scratch, rather than relying solely on high-level frameworks. 
+Reproduced MNIST handwritten digit classification.
 
-The plan is to start by training models using PyTorch, and then systematically peel back the layers—replacing modules, the autograd engine, and the optimizer—until everything is running on pure NumPy.
-
+The plan is to start by training models using PyTorch, and then slowly replace modules, the autograd engine, and the optimizer.
 ## Roadmap & Current Progress
 
 - **Phase 1: Raw PyTorch (Current)**
